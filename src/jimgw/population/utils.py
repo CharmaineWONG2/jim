@@ -20,42 +20,63 @@ def create_model(model_name):
         raise ImportError(f"Could not import model '{model_name}': {str(e)}")
 
 
-def extract_data_from_npz_files(data_dir, column_name, num_samples=50, random_seed=42):
+import glob
+import numpy as np
+import jax
+import jax.numpy as jnp
+
+def extract_data_from_npz_files(data_dir, column_names, num_samples=50, random_seed=42):
     """
     Extracts specified column data from the given .npz files.
 
     Parameters:
     - data_dir (str): The directory containing all the .npz files.
-    - column_name (str): The name of the column to extract from the DataFrame.
+    - column_names (list of str): The names of the columns to extract from the DataFrame.
     - num_samples (int): Number of samples to extract from each file.
     - random_seed (int): Seed for random number generation.
 
     Returns:
-    - jnp.array: Stacked array of extracted data.
+    - jnp.array: Stacked array of extracted data for each column.
     """
     
     npz_files = glob.glob(f"{data_dir}/*.npz")
     key = jax.random.PRNGKey(random_seed)
-    result_list = []
+    result_dict = {column: [] for column in column_names}
 
     for npz_file in npz_files:
         print(f"Loading file: {npz_file}")
 
         with np.load(npz_file, allow_pickle=True) as data:
             data_dict = data['arr_0'].item() 
-            if column_name not in data_dict:
-                raise ValueError(f"Column '{column_name}' not found in the data.")
-            
-            extracted_data = data_dict[column_name].reshape(-1,)
+            for column_name in column_names:
+                if column_name not in data_dict:
+                    raise ValueError(f"Column '{column_name}' not found in the data.")
+                
+                extracted_data = data_dict[column_name].reshape(-1,)
 
-            if isinstance(extracted_data, np.ndarray):
-                extracted_data = jax.device_put(extracted_data) 
+                if isinstance(extracted_data, np.ndarray):
+                    extracted_data = jax.device_put(extracted_data) 
 
-            key, subkey = jax.random.split(key)
-            sample_indices = jax.random.choice(subkey, extracted_data.shape[0], shape=(num_samples,), replace=True)
+                key, subkey = jax.random.split(key)
+                sample_indices = jax.random.choice(subkey, extracted_data.shape[0], shape=(num_samples,), replace=True)
 
-            sampled_data = extracted_data[sample_indices]
-            result_list.append(sampled_data)
-    stacked_array = jnp.stack(result_list)
+                sampled_data = extracted_data[sample_indices]
+                result_dict[column_name].append(sampled_data)
     
+    # Stack the arrays for each column
+    stacked_arrays = {column: jnp.stack(data) for column, data in result_dict.items()}
+    
+    return stacked_arrays
     return stacked_array
+
+def compute_mass_ratio(masses: dict) -> float:
+    """
+    Compute the mass ratio given a dictionary of primary and secondary masses.
+
+    masses: dict containing 'm_1' and 'm_2' 
+    return: mass ratio q (m_2 / m_1)
+    """
+    m_1 = masses['m_1']
+    m_2 = masses['m_2']
+    mass_ratio = m_2 / m_1
+    return mass_ratio

@@ -3,12 +3,12 @@ import jax.numpy as jnp
 from jaxtyping import Float
 
 from jimgw.base import LikelihoodBase
-from jimgw.population.utils import extract_data_from_npz_files
-
+from jimgw.population.utils import extract_all_data_from_npz_files
+    
 class PopulationLikelihood(LikelihoodBase):
-    def __init__(self, data_dir, column_name, num_samples, model_class):
-        self.posteriors = extract_data_from_npz_files(data_dir, column_name, num_samples, random_seed=42)
-        self.population_model = model_class()
+    def __init__(self, data_dir, num_samples, model_class):
+        self.posteriors = extract_all_data_from_npz_files(data_dir, num_samples, random_seed=42)
+        self.population_model = model_class
 
     def evaluate(self, pop_params: dict[str, Float], data: dict) -> Float:
         model_output = self.population_model.evaluate(pop_params, self.posteriors)

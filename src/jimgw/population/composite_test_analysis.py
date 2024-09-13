@@ -20,17 +20,17 @@ def parse_args():
 
 def main():
     args = parse_args()
-    # truncated_power_law_model = TruncatedPowerLawModel(parameter_names=['m_1'], param_mapping ={
+    # truncated_power_law_model = TruncatedPowerLawModel(parameter_names=['m_1'], pop_param_mapping ={
     #     'x_min': 'm_min',
     #     'x_max': 'm_max',
     #     'alpha': 'alpha_m1'
     # })
-    # default_spin_model = DefaultSpinModel(parameter_names=['s1_z'], param_mapping={
+    # default_spin_model = DefaultSpinModel(parameter_names=['s1_z'], pop_param_mapping={
     #     'alpha': 'alpha_s1_z',
     #     'beta': 'beta_s1_z'
     # }
     # )
-    model = M1_PowerPeak_q_TruncatedPowerLawModel (parameter_names = ['m_1', 'm_2'],param_mapping = {
+    model = M1_PowerPeak_q_TruncatedPowerLawModel (parameter_names = ['m_1', 'm_2'],pop_param_mapping = {
         'x_min': 'm_min',   
         'x_max': 'm_max',
         'alpha': 'alpha_m1', 
@@ -42,7 +42,7 @@ def main():
     }
     )
     
-    # model = M1_q_TruncatedPowerLawModel (parameter_names = ['m_1', 'm_2'],param_mapping = {
+    # model = M1_q_TruncatedPowerLawModel (parameter_names = ['m_1', 'm_2'],pop_param_mapping = {
     #     'x_min': 'm_min',   
     #     'x_max': 'm_max',
     #     'alpha': 'alpha_m1', 

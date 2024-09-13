@@ -5,18 +5,18 @@ from dataclasses import dataclass, field
 import jax
 
 class PopulationModelBase(ABC):
-    def __init__(self, parameter_names: list[str], pop_params_names: list[str] = [] , param_mapping: dict = None):
+    def __init__(self, parameter_names: list[str], pop_params_names: list[str] = [] , pop_param_mapping: dict = None):
         """
         parameter_names : list[str]
             A list of names for the individual event parameters of the population model.
         pop_params_names : list[str]
             A list of names for the population parameters of the population model.
-        param_mapping : dict    
+        pop_param_mapping : dict    
             A dictionary to map original parameter names to new names, keyed by model instance
         """
         self.parameter_names = parameter_names
         self.pop_params_names = pop_params_names
-        self.param_mapping = param_mapping
+        self.pop_param_mapping = pop_param_mapping
 
     def evaluate(self, pop_params: dict, data: dict) -> float:
         """
@@ -56,16 +56,16 @@ class CombinePopulationModel(PopulationModelBase):
         return combined_result
 
 class TruncatedPowerLawModel(PopulationModelBase):
-    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+    def __init__(self, parameter_names: list[str], pop_param_mapping: dict[str, str] = None):
         super().__init__(parameter_names=parameter_names)
         self.param = parameter_names[0]
-        self.param_mapping = param_mapping if param_mapping else {}
+        self.pop_param_mapping = pop_param_mapping if pop_param_mapping else {}
         
         # Apply the parameter mapping
         self.mapped_params = {
-            "x_min": self.param_mapping.get("x_min", "x_min"),
-            "x_max": self.param_mapping.get("x_max", "x_max"),
-            "alpha": self.param_mapping.get("alpha", "alpha")
+            "x_min": self.pop_param_mapping.get("x_min", "x_min"),
+            "x_max": self.pop_param_mapping.get("x_max", "x_max"),
+            "alpha": self.pop_param_mapping.get("alpha", "alpha")
         }
 
     def truncated_power_law(self, x, x_min, x_max, alpha):
@@ -91,19 +91,19 @@ class TruncatedPowerLawModel(PopulationModelBase):
         return self.truncated_power_law(data, x_min, x_max, alpha)
     
 class BrokenPowerLawModel(PopulationModelBase):
-    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+    def __init__(self, parameter_names: list[str], pop_param_mapping: dict[str, str] = None):
         super().__init__(parameter_names=parameter_names)
         self.param = parameter_names[0]
-        self.param_mapping = param_mapping if param_mapping else {}
+        self.pop_param_mapping = pop_param_mapping if pop_param_mapping else {}
         
         # Apply the parameter mapping
         self.mapped_params = {
-            "x_min": self.param_mapping.get("x_min", "x_min"),
-            "x_max": self.param_mapping.get("x_max", "x_max"),
-            "alpha1": self.param_mapping.get("alpha1", "alpha1"),
-            "alpha2": self.param_mapping.get("alpha2", "alpha2"),
-            "b": self.param_mapping.get("b", "b"),
-            "delta": self.param_mapping.get("delta", "delta")
+            "x_min": self.pop_param_mapping.get("x_min", "x_min"),
+            "x_max": self.pop_param_mapping.get("x_max", "x_max"),
+            "alpha1": self.pop_param_mapping.get("alpha1", "alpha1"),
+            "alpha2": self.pop_param_mapping.get("alpha2", "alpha2"),
+            "b": self.pop_param_mapping.get("b", "b"),
+            "delta": self.pop_param_mapping.get("delta", "delta")
         }
         
     def smoothing_function(x, x_min, delta):
@@ -153,20 +153,20 @@ class BrokenPowerLawModel(PopulationModelBase):
         return self.broken_power_law(data, x_min, x_max, alpha1, alpha2, b, delta)
     
 class PowerPeakModel(PopulationModelBase):
-    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+    def __init__(self, parameter_names: list[str], pop_param_mapping: dict[str, str] = None):
         super().__init__(parameter_names=parameter_names)
         self.param = parameter_names[0]
-        self.param_mapping = param_mapping if param_mapping else {}
+        self.pop_param_mapping = pop_param_mapping if pop_param_mapping else {}
         
         # Apply the parameter mapping
         self.mapped_params = {
-            "x_min": self.param_mapping.get("x_min", "x_min"),
-            "x_max": self.param_mapping.get("x_max", "x_max"),
-            "alpha": self.param_mapping.get("alpha", "alpha"),
-            "lamda_peak": self.param_mapping.get("lamda_peak", "lamda_peak"),
-            "mu": self.param_mapping.get("mu", "mu"),
-            "sigma": self.param_mapping.get("sigma", "sigma"),
-            "delta": self.param_mapping.get("delta", "delta")
+            "x_min": self.pop_param_mapping.get("x_min", "x_min"),
+            "x_max": self.pop_param_mapping.get("x_max", "x_max"),
+            "alpha": self.pop_param_mapping.get("alpha", "alpha"),
+            "lamda_peak": self.pop_param_mapping.get("lamda_peak", "lamda_peak"),
+            "mu": self.pop_param_mapping.get("mu", "mu"),
+            "sigma": self.pop_param_mapping.get("sigma", "sigma"),
+            "delta": self.pop_param_mapping.get("delta", "delta")
         }
     
     def smoothing_function(x, x_min, delta):
@@ -221,17 +221,17 @@ class PowerPeakModel(PopulationModelBase):
         return self.power_peak(data, x_min, x_max, alpha, lamda_peak, mu, sigma, delta)   
     
 class M1_q_TruncatedPowerLawModel(PopulationModelBase):
-    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+    def __init__(self, parameter_names: list[str], pop_param_mapping: dict[str, str] = None):
         super().__init__(parameter_names=parameter_names)
         self.param = parameter_names[0]
-        self.param_mapping = param_mapping if param_mapping else {}
+        self.pop_param_mapping = pop_param_mapping if pop_param_mapping else {}
         
         # Apply the parameter mapping
         self.mapped_params = {
-            "x_min": self.param_mapping.get("x_min", "x_min"),
-            "x_max": self.param_mapping.get("x_max", "x_max"),
-            "alpha": self.param_mapping.get("alpha", "alpha"),
-            "beta": self.param_mapping.get("beta", "beta")
+            "x_min": self.pop_param_mapping.get("x_min", "x_min"),
+            "x_max": self.pop_param_mapping.get("x_max", "x_max"),
+            "alpha": self.pop_param_mapping.get("alpha", "alpha"),
+            "beta": self.pop_param_mapping.get("beta", "beta")
         }
     
     def truncated_power_law(self, x, x_min, x_max, alpha):
@@ -263,20 +263,20 @@ class M1_q_TruncatedPowerLawModel(PopulationModelBase):
         return self.truncated_power_law_2d(data, x_min, x_max, alpha, beta)
     
 class M1_BrokenPower_q_TruncatedPowerLawModel(PopulationModelBase):
-    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+    def __init__(self, parameter_names: list[str], pop_param_mapping: dict[str, str] = None):
     super().__init__(parameter_names=parameter_names)
     self.param = parameter_names[0]
-    self.param_mapping = param_mapping if param_mapping else {}
+    self.pop_param_mapping = pop_param_mapping if pop_param_mapping else {}
     
     # Apply the parameter mapping
     self.mapped_params = {
-        "x_min": self.param_mapping.get("x_min", "x_min"),
-        "x_max": self.param_mapping.get("x_max", "x_max"),
-        "alpha1": self.param_mapping.get("alpha1", "alpha1"),
-        "alpha2": self.param_mapping.get("alpha2", "alpha2"),
-        "b": self.param_mapping.get("b", "b"),
-        "delta": self.param_mapping.get("delta", "delta")
-        "beta": self.param_mapping.get("beta", "beta")
+        "x_min": self.pop_param_mapping.get("x_min", "x_min"),
+        "x_max": self.pop_param_mapping.get("x_max", "x_max"),
+        "alpha1": self.pop_param_mapping.get("alpha1", "alpha1"),
+        "alpha2": self.pop_param_mapping.get("alpha2", "alpha2"),
+        "b": self.pop_param_mapping.get("b", "b"),
+        "delta": self.pop_param_mapping.get("delta", "delta")
+        "beta": self.pop_param_mapping.get("beta", "beta")
     }
     
     def smoothing_function(x, x_min, delta):
@@ -329,20 +329,20 @@ class M1_BrokenPower_q_TruncatedPowerLawModel(PopulationModelBase):
         return self.broken_power_truncated_power(data, x_min, x_max, alpha1, alpha2, b, delta,beta )
         
 class M1_PowerPeak_q_TruncatedPowerLawModel(PopulationModelBase):
-    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+    def __init__(self, parameter_names: list[str], pop_param_mapping: dict[str, str] = None):
         super().__init__(parameter_names=parameter_names)
-        self.param_mapping = param_mapping if param_mapping else {}
+        self.pop_param_mapping = pop_param_mapping if pop_param_mapping else {}
 
         # Apply the parameter mapping
         self.mapped_params = {
-            "x_min": self.param_mapping.get("x_min", "x_min"),
-            "x_max": self.param_mapping.get("x_max", "x_max"),
-            "alpha": self.param_mapping.get("alpha", "alpha"),
-            "beta": self.param_mapping.get("beta", "beta"),
-            "lambda_peak": self.param_mapping.get("lambda_peak", "lambda_peak"),
-            "mu": self.param_mapping.get("mu", "mu"),
-            "sigma": self.param_mapping.get("sigma", "sigma"),
-            "delta": self.param_mapping.get("delta", "delta")
+            "x_min": self.pop_param_mapping.get("x_min", "x_min"),
+            "x_max": self.pop_param_mapping.get("x_max", "x_max"),
+            "alpha": self.pop_param_mapping.get("alpha", "alpha"),
+            "beta": self.pop_param_mapping.get("beta", "beta"),
+            "lambda_peak": self.pop_param_mapping.get("lambda_peak", "lambda_peak"),
+            "mu": self.pop_param_mapping.get("mu", "mu"),
+            "sigma": self.pop_param_mapping.get("sigma", "sigma"),
+            "delta": self.pop_param_mapping.get("delta", "delta")
         }
 
     def smoothing_function(self,x, x_min, delta):
@@ -396,14 +396,14 @@ class M1_PowerPeak_q_TruncatedPowerLawModel(PopulationModelBase):
 
 
 class DefaultSpinModel(PopulationModelBase):
-    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+    def __init__(self, parameter_names: list[str], pop_param_mapping: dict[str, str] = None):
         super().__init__(parameter_names=parameter_names)
         self.param = parameter_names[0]
-        self.param_mapping = param_mapping if param_mapping else {}
+        self.pop_param_mapping = pop_param_mapping if pop_param_mapping else {}
 
         self.mapped_params = {
-            "alpha": self.param_mapping.get("alpha", "alpha"),
-            "beta": self.param_mapping.get("beta", "beta"),
+            "alpha": self.pop_param_mapping.get("alpha", "alpha"),
+            "beta": self.pop_param_mapping.get("beta", "beta"),
         }
         
     def beta_distribution(self, x, alpha, beta):

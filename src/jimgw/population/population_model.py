@@ -25,6 +25,9 @@ class PopulationModelBase(ABC):
         raise NotImplementedError
 
 class CombinePopulationModel(PopulationModelBase):
+    """
+    To compose two independent population models together.
+    """
     
     base_population_models: list[PopulationModelBase] = field(default_factory=list)
 
@@ -86,12 +89,151 @@ class TruncatedPowerLawModel(PopulationModelBase):
         alpha = pop_params[self.mapped_params["alpha"]]
         
         return self.truncated_power_law(data, x_min, x_max, alpha)
+    
+class BrokenPowerLawModel(PopulationModelBase):
+    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+        super().__init__(parameter_names=parameter_names)
+        self.param = parameter_names[0]
+        self.param_mapping = param_mapping if param_mapping else {}
+        
+        # Apply the parameter mapping
+        self.mapped_params = {
+            "x_min": self.param_mapping.get("x_min", "x_min"),
+            "x_max": self.param_mapping.get("x_max", "x_max"),
+            "alpha1": self.param_mapping.get("alpha1", "alpha1"),
+            "alpha2": self.param_mapping.get("alpha2", "alpha2"),
+            "b": self.param_mapping.get("b", "b"),
+            "delta": self.param_mapping.get("delta", "delta")
+        }
+        
+    def smoothing_function(x, x_min, delta):
+        """
+        Apply a smoothing function to the input array x based on the parameters x_min and delta.
 
-# May be composed by the CombinePopulationModel
-class PrimaryMassMassRatioTruncatedPowerLawModel(PopulationModelBase):
-    def __init__(self):
-        super().__init__()
+        Parameters:
+        - x (jnp.array): Input array.
+        - x_min (float): Minimum value for the smoothing function.
+        - delta (float): Smoothing parameter.
 
+        Returns:
+        - jnp.array: Smoothed array.
+        """
+        case1 = (x < x_min)
+        case2 = (x >= x_min) & (x < x_min + delta)
+        case3 = (x >= x_min + delta)
+
+        result = jnp.where(case1, 0, jnp.where(case2, 1 / (jnp.exp(delta / (x - x_min) + delta / (x - x_min - delta)) + 1),1))
+        return result
+    
+    def broken_power_law(self, x, x_min, x_max, alpha1, alpha2, b, delta):
+        x_break = x_min + b * (x_max - x_min)
+        case1 = (x > x_min) & (x < x_break)
+        case2 = (x >= x_break) & (x < x_max)
+        case3 = (x < x_min) | (x > x_max)
+        
+        result = jnp.where(case1, x **(-alpha1) * self.smoothing_function(x, x_min, delta), jnp.where(case2, x **(-alpha2) * self.smoothing_function(x, x_min, delta, 0)))
+  
+
+    def evaluate(self, pop_params: dict[str, float], data: dict) -> float:
+        """
+        Evaluate the model using the provided population parameters and data.
+        
+        pop_params: Dictionary of population parameters
+        data: Dictionary of data to evaluate the model on
+        
+        return: Evaluation result
+        """
+        x_min = pop_params[self.mapped_params["x_min"]]
+        x_max = pop_params[self.mapped_params["x_max"]]
+        alpha1 = pop_params[self.mapped_params["alpha1"]]
+        alpha2 = pop_params[self.mapped_params["alpha2"]]
+        b = pop_params[self.mapped_params["b"]]
+        delta = pop_params[self.mapped_params["delta"]]
+        
+        return self.broken_power_law(data, x_min, x_max, alpha1, alpha2, b, delta)
+    
+class PowerPeakModel(PopulationModelBase):
+    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+        super().__init__(parameter_names=parameter_names)
+        self.param = parameter_names[0]
+        self.param_mapping = param_mapping if param_mapping else {}
+        
+        # Apply the parameter mapping
+        self.mapped_params = {
+            "x_min": self.param_mapping.get("x_min", "x_min"),
+            "x_max": self.param_mapping.get("x_max", "x_max"),
+            "alpha": self.param_mapping.get("alpha", "alpha"),
+            "lamda_peak": self.param_mapping.get("lamda_peak", "lamda_peak"),
+            "mu": self.param_mapping.get("mu", "mu"),
+            "sigma": self.param_mapping.get("sigma", "sigma"),
+            "delta": self.param_mapping.get("delta", "delta")
+        }
+    
+    def smoothing_function(x, x_min, delta):
+        """
+        Apply a smoothing function to the input array x based on the parameters x_min and delta.
+
+        Parameters:
+        - x (jnp.array): Input array.
+        - x_min (float): Minimum value for the smoothing function.
+        - delta (float): Smoothing parameter.
+
+        Returns:
+        - jnp.array: Smoothed array.
+        """
+        case1 = (x < x_min)
+        case2 = (x >= x_min) & (x < x_min + delta)
+        case3 = (x >= x_min + delta)
+
+        result = jnp.where(case1, 0, jnp.where(case2, 1 / (jnp.exp(delta / (x - x_min) + delta / (x - x_min - delta)) + 1),1))
+        return result
+    
+    def normalized_gaussian(self, x, mu, sigma):
+        return 1/(sigma * jnp.sqrt(2*jnp.pi)) * jnp.exp(-0.5 * ((x - mu) / sigma)**2)
+    
+    def truncated_power_law(self, x, x_min, x_max, alpha):
+        valid_indices = (x[self.param] >= x_min) & (x[self.param] <= x_max)
+        C = (1 - alpha) / (x_max**(1 - alpha) - x_min**(1 - alpha))
+        pdf = jnp.zeros_like(x[self.param])  
+        pdf = jnp.where(valid_indices, C / (x[self.param] ** alpha), pdf)
+        return pdf
+    
+    def power_peak(self, x, x_min, x_max, alpha, lamda_peak, mu, sigma, delta):
+        return((1-lamda_peak) * self.truncated_power_law(x, x_min, x_max, alpha) + lamda_peak * self.normalized_gaussian(x, mu, sigma) ) * self.smoothing_function(x, x_min, delta)
+
+    def evaluate(self, pop_params: dict[str, float], data: dict) -> float:
+        """
+        Evaluate the model using the provided population parameters and data.
+        
+        pop_params: Dictionary of population parameters
+        data: Dictionary of data to evaluate the model on
+        
+        return: Evaluation result
+        """
+        x_min = pop_params[self.mapped_params["x_min"]]
+        x_max = pop_params[self.mapped_params["x_max"]]
+        alpha = pop_params[self.mapped_params["alpha"]]
+        lamda_peak = pop_params[self.mapped_params["lamda_peak"]]
+        mu = pop_params[self.mapped_params["mu"]]
+        sigma = pop_params[self.mapped_params["sigma"]]
+        delta = pop_params[self.mapped_params["delta"]]
+        
+        return self.power_peak(data, x_min, x_max, alpha, lamda_peak, mu, sigma, delta)   
+    
+class M1_q_TruncatedPowerLawModel(PopulationModelBase):
+    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+        super().__init__(parameter_names=parameter_names)
+        self.param = parameter_names[0]
+        self.param_mapping = param_mapping if param_mapping else {}
+        
+        # Apply the parameter mapping
+        self.mapped_params = {
+            "x_min": self.param_mapping.get("x_min", "x_min"),
+            "x_max": self.param_mapping.get("x_max", "x_max"),
+            "alpha": self.param_mapping.get("alpha", "alpha"),
+            "beta": self.param_mapping.get("beta", "beta")
+        }
+    
     def truncated_power_law(self, x, x_min, x_max, alpha):
         valid_indices = (x >= x_min) & (x <= x_max)
         C = (1 - alpha) / (x_max**(1 - alpha) - x_min**(1 - alpha))
@@ -113,8 +255,144 @@ class PrimaryMassMassRatioTruncatedPowerLawModel(PopulationModelBase):
         return pdf
 
     def evaluate(self, pop_params: dict, data: dict) -> float:
-        return self.truncated_power_law_2d(data, pop_params["m_min"], pop_params["m_max"], pop_params["alpha"], pop_params["beta"])
+        x_min = pop_params[self.mapped_params["x_min"]]
+        x_max = pop_params[self.mapped_params["x_max"]]
+        alpha = pop_params[self.mapped_params["alpha"]]
+        beta = pop_params[self.mapped_params["beta"]]
+        
+        return self.truncated_power_law_2d(data, x_min, x_max, alpha, beta)
     
+class M1_BrokenPower_q_TruncatedPowerLawModel(PopulationModelBase):
+    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+    super().__init__(parameter_names=parameter_names)
+    self.param = parameter_names[0]
+    self.param_mapping = param_mapping if param_mapping else {}
+    
+    # Apply the parameter mapping
+    self.mapped_params = {
+        "x_min": self.param_mapping.get("x_min", "x_min"),
+        "x_max": self.param_mapping.get("x_max", "x_max"),
+        "alpha1": self.param_mapping.get("alpha1", "alpha1"),
+        "alpha2": self.param_mapping.get("alpha2", "alpha2"),
+        "b": self.param_mapping.get("b", "b"),
+        "delta": self.param_mapping.get("delta", "delta")
+        "beta": self.param_mapping.get("beta", "beta")
+    }
+    
+    def smoothing_function(x, x_min, delta):
+        """
+        Apply a smoothing function to the input array x based on the parameters x_min and delta.
+
+        Parameters:
+        - x (jnp.array): Input array.
+        - x_min (float): Minimum value for the smoothing function.
+        - delta (float): Smoothing parameter.
+
+        Returns:
+        - jnp.array: Smoothed array.
+        """
+        case1 = (x < x_min)
+        case2 = (x >= x_min) & (x < x_min + delta)
+        case3 = (x >= x_min + delta)
+
+        result = jnp.where(case1, 0, jnp.where(case2, 1 / (jnp.exp(delta / (x - x_min) + delta / (x - x_min - delta)) + 1),1))
+        return result
+    
+    def broken_power_law(self, x, x_min, x_max, alpha1, alpha2, b, delta):
+        x_break = x_min + b * (x_max - x_min)
+        case1 = (x > x_min) & (x < x_break)
+        case2 = (x >= x_break) & (x < x_max)
+        case3 = (x < x_min) | (x > x_max)
+        result = jnp.where(case1, x **(-alpha1) * self.smoothing_function(x, x_min, delta), jnp.where(case2, x **(-alpha2) * self.smoothing_function(x, x_min, delta, 0)))
+
+    def truncated_power_law(self, x, x_min, x_max, alpha):
+        valid_indices = (x >= x_min) & (x <= x_max)
+        C = (1 - alpha) / (x_max**(1 - alpha) - x_min**(1 - alpha))
+        pdf = jnp.zeros_like(x)  
+        pdf = jnp.where(valid_indices, C / (x ** alpha), pdf)
+        return pdf
+
+    def broken_power_truncated_power(self, x, x_min, x_max, alpha1, alpha2, b, delta,beta):
+        broken_power = self.broken_power_law(x["m_1"], x_min, x_max, alpha1, alpha2, b, delta)
+        q_truncated_power = self.truncated_power_law((x["m_2"] / x["m_1"]), (x_min/x["m_1"]), 1, beta) * self.smoothing_function(x["m_2"], x_min, delta )
+        return broken_power * q_truncated_power
+
+    def evaluate(self, pop_params: dict, data: dict) -> float:
+        x_min = pop_params[self.mapped_params["x_min"]]
+        x_max = pop_params[self.mapped_params["x_max"]]
+        alpha1 = pop_params[self.mapped_params["alpha1"]]
+        alpha2 = pop_params[self.mapped_params["alpha2"]]
+        b = pop_params[self.mapped_params["b"]]
+        delta = pop_params[self.mapped_params["delta"]]
+        beta = pop_params[self.mapped_params["beta"]]
+   
+        return self.broken_power_truncated_power(data, x_min, x_max, alpha1, alpha2, b, delta,beta )
+        
+class M1_PowerPeak_q_TruncatedPowerLawModel(PopulationModelBase):
+    def __init__(self, parameter_names: list[str], param_mapping: dict[str, str] = None):
+        super().__init__(parameter_names=parameter_names)
+        self.param_mapping = param_mapping if param_mapping else {}
+
+        # Apply the parameter mapping
+        self.mapped_params = {
+            "x_min": self.param_mapping.get("x_min", "x_min"),
+            "x_max": self.param_mapping.get("x_max", "x_max"),
+            "alpha": self.param_mapping.get("alpha", "alpha"),
+            "beta": self.param_mapping.get("beta", "beta"),
+            "lambda_peak": self.param_mapping.get("lambda_peak", "lambda_peak"),
+            "mu": self.param_mapping.get("mu", "mu"),
+            "sigma": self.param_mapping.get("sigma", "sigma"),
+            "delta": self.param_mapping.get("delta", "delta")
+        }
+
+    def smoothing_function(self,x, x_min, delta):
+        """
+        Apply a smoothing function to the input array x based on the parameters x_min and delta.
+
+        Parameters:
+        - x (jnp.array): Input array.
+        - x_min (float): Minimum value for the smoothing function.
+        - delta (float): Smoothing parameter.
+
+        Returns:
+        - jnp.array: Smoothed array.
+        """
+        case1 = (x < x_min)
+        case2 = (x >= x_min) & (x < x_min + delta)
+        case3 = (x >= x_min + delta)
+
+        result = jnp.where(case1, 0, jnp.where(case2, 1 / (jnp.exp(delta / (x - x_min) + delta / (x - x_min - delta)) + 1),1))
+        return result
+
+    def normalized_gaussian(self, x, mu, sigma):
+        return 1/(sigma * jnp.sqrt(2*jnp.pi)) * jnp.exp(-0.5 * ((x - mu) / sigma)**2)
+
+    def truncated_power_law(self, x, x_min, x_max, alpha):
+        valid_indices = (x >= x_min) & (x <= x_max)
+        C = (1 - alpha) / (x_max**(1 - alpha) - x_min**(1 - alpha))
+        pdf = jnp.zeros_like(x)  
+        pdf = jnp.where(valid_indices, C / (x ** alpha), pdf)
+        return pdf
+
+    def power_peak(self, x, x_min, x_max, alpha, lamda_peak, mu, sigma, delta):
+        return((1-lamda_peak) * self.truncated_power_law(x, x_min, x_max, alpha) + lamda_peak * self.normalized_gaussian(x, mu, sigma) ) * self.smoothing_function(x, x_min, delta)
+
+    def power_peak_truncated_power(self, x, x_min, x_max, alpha, lamda_peak, mu, sigma, delta, beta):
+        m1_power_peak = self.power_peak(x["m_1"], x_min, x_max, alpha, lamda_peak, mu, sigma, delta)
+        q_truncated_power = self.truncated_power_law((x["m_2"] / x["m_1"]), (x_min/x["m_1"]), 1, beta) * self.smoothing_function(x["m_2"], x_min, delta )
+        return m1_power_peak * q_truncated_power
+
+    def evaluate(self, pop_params: dict, data: dict) -> float:
+        x_min = pop_params[self.mapped_params["x_min"]]
+        x_max = pop_params[self.mapped_params["x_max"]]
+        alpha = pop_params[self.mapped_params["alpha"]]
+        beta = pop_params[self.mapped_params["beta"]]
+        lambda_peak = pop_params[self.mapped_params["lambda_peak"]]
+        mu = pop_params[self.mapped_params["mu"]]
+        sigma = pop_params[self.mapped_params["sigma"]]
+        delta = pop_params[self.mapped_params["delta"]]
+        
+        return self.power_peak_truncated_power(data, x_min, x_max, alpha, lambda_peak, mu, sigma, delta, beta)
 
 
 class DefaultSpinModel(PopulationModelBase):
